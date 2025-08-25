@@ -2,8 +2,20 @@ name: Deploy to Elastic Beanstalk
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+
+permissions:
+  id-token: write         # REQUIRED for GitHub OIDC -> AWS
+  contents: read
+
+env:
+  AWS_ACCOUNT_ID: "186829790897"
+  AWS_REGION: us-east-1
+  ECR_REPO: ci-cd-apprunner
+  EB_APP: ci-cd-apprunner
+  EB_ENV: ci-cd-apprunner-env           # <- exact EB env name (all lowercase)
+  S3_BUCKET: elasticbeanstalk-us-east-1-186829790897
+  IMAGE_TAG: latest
 
 jobs:
   deploy:
@@ -13,35 +25,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::186829790897:role/gh-actions-deploy
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR
         run: |
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 186829790897.dkr.ecr.us-east-1.amazonaws.com
+          aws ecr get-login-password --region $AWS_REGION \
+            | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
       - name: Build, tag, and push Docker image
         run: |
-          IMAGE=186829790897.dkr.ecr.us-east-1.amazonaws.com/ci-cd-apprunner:latest
-          docker build -t $IMAGE ./app
-          docker push $IMAGE
+          IMAGE=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+          docker build -t "$IMAGE" ./app
+          docker push "$IMAGE"
 
-      - name: Upload Dockerrun.aws.json to S3
-        run: |
-          aws s3 cp Dockerrun.aws.json s3://elasticbeanstalk-us-east-1-186829790897/deployments/Dockerrun.aws.json
+      - name: Package Dockerrun (zip required by EB)
+        run: zip -j deploy.zip Dockerrun.aws.json
 
-      - name: Create new EB application version
+      - name: Upload bundle & create EB application version
         run: |
+          KEY="deploy-${GITHUB_SHA}.zip"
+          aws s3 cp deploy.zip "s3://$S3_BUCKET/$KEY"
           aws elasticbeanstalk create-application-version \
-            --application-name ci-cd-apprunner \
-            --version-label github-${{ github.sha }} \
-            --source-bundle S3Bucket="elasticbeanstalk-us-east-1-186829790897",S3Key="deployments/Dockerrun.aws.json"
+            --application-name "$EB_APP" \
+            --version-label "$GITHUB_SHA" \
+            --source-bundle S3Bucket="$S3_BUCKET",S3Key="$KEY"
 
       - name: Update Elastic Beanstalk environment
         run: |
           aws elasticbeanstalk update-environment \
-            --environment-name Ci-cd-apprunner-env \
-            --version-label github-${{ github.sha }}
+            --environment-name "$EB_ENV" \
+            --version-label "$GITHUB_SHA"
