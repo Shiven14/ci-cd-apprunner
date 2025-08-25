@@ -1,7 +1,7 @@
 {
   "AWSEBDockerrunVersion": "1",
   "Image": {
-    "Name": "186829790897.dkr.ecr.us-east-1.amazonaws.com/ci-cd-apprunner:latest",
+    "Name": "186829790897.dkr.ecr.us-east-1.amazonaws.com/ci-cd-apprunner:8640aac",
     "Update": "true"
   },
   "Ports": [
