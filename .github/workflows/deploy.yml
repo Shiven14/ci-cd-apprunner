@@ -1,0 +1,47 @@
+name: Deploy to Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::186829790897:role/gh-actions-deploy
+          aws-region: us-east-1
+
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 186829790897.dkr.ecr.us-east-1.amazonaws.com
+
+      - name: Build, tag, and push Docker image
+        run: |
+          IMAGE=186829790897.dkr.ecr.us-east-1.amazonaws.com/ci-cd-apprunner:latest
+          docker build -t $IMAGE ./app
+          docker push $IMAGE
+
+      - name: Upload Dockerrun.aws.json to S3
+        run: |
+          aws s3 cp Dockerrun.aws.json s3://elasticbeanstalk-us-east-1-186829790897/deployments/Dockerrun.aws.json
+
+      - name: Create new EB application version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name ci-cd-apprunner \
+            --version-label github-${{ github.sha }} \
+            --source-bundle S3Bucket="elasticbeanstalk-us-east-1-186829790897",S3Key="deployments/Dockerrun.aws.json"
+
+      - name: Update Elastic Beanstalk environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name Ci-cd-apprunner-env \
+            --version-label github-${{ github.sha }}
