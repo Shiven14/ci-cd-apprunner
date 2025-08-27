@@ -26,29 +26,28 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install deps
+      - name: Install dependencies
         run: npm ci
         working-directory: web
 
       - name: Build
         run: npm run build
         working-directory: web
-        # .env.production is picked up automatically by Vite
 
       - name: SPA fallback (404.html)
         run: cp web/dist/index.html web/dist/404.html
 
-      - name: Upload artifact
+      - name: Upload build
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
 
   deploy:
     needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
