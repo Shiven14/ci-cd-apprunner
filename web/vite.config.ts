@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   // IMPORTANT: repo name here
-  base: '/ci-cd-apprunner/',
+  base: '/url-shortener/',
 })
